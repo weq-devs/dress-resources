@@ -41,7 +41,9 @@ export async function stageDressRelease({
   outputDirectory,
   tag,
   repository = 'weq-devs/dress-resources',
+  minWeqVersion = '2.7.0',
 }) {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(minWeqVersion)) throw new Error('最低 WeQ 版本无效');
   if (!/^[a-f0-9]{40}$/.test(nativeManifest?.commit ?? ''))
     throw new Error('native 来源缺少完整 commit');
   tag ??= `dress-${nativeManifest.commit.slice(0, 7)}`;
@@ -79,8 +81,15 @@ export async function stageDressRelease({
       await verifyPart(join(staging, asset), parts[kind], kind);
     }
     await writeFile(join(staging, 'index-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    // 与 WeQ 的统一描述保持同一内容身份；不把资源 Release tag 当成内容版本。
+    const contentVersion = createHash('sha256').update(JSON.stringify([
+      ['dress', manifest.nativeCommit, manifest.format, ['bubble', 'font', 'widget'].map((kind) => [parts[kind].asset, parts[kind].size, parts[kind].sha256])],
+    ])).digest('hex');
+    const catalog = { schemaVersion: 1, target: 'any', packs: [{ id: 'dress', contentVersion, minWeqVersion, runtime: 'ntdr-v1', components: [{ type: 'dress', manifest }] }] };
+    await writeFile(join(staging, 'enhancement-pack.json'), `${JSON.stringify(catalog, null, 2)}\n`);
     const hashes = PARTS.map((kind) => `${parts[kind].sha256}  ${parts[kind].asset}`);
     hashes.push(`${await hashFile(join(staging, 'index-manifest.json'))}  index-manifest.json`);
+    hashes.push(`${await hashFile(join(staging, 'enhancement-pack.json'))}  enhancement-pack.json`);
     await writeFile(join(staging, 'SHA256SUMS'), `${hashes.sort().join('\n')}\n`);
     // 不覆盖已有产物目录，防止把不同内容误发布到同一版本。
     await rename(staging, outputDirectory);
@@ -108,6 +117,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
         outputDirectory: resolve(opt('--output')),
         tag: opt('--tag'),
         repository: opt('--repository'),
+        minWeqVersion: opt('--min-weq-version'),
       });
       console.log(`已验证 ${manifest.tag}：三类独立索引，兼容 native ${manifest.nativeCommit}`);
     } catch (error) {

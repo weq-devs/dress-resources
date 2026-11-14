@@ -35,12 +35,16 @@ test('只发布三份已验证的加密索引及独立清单，输出无私仓�
   assert.equal(manifest.format, 'ntdr-v1');
   assert.equal(manifest.privateField, undefined);
   assert.deepEqual((await readdir(f.outputDirectory)).sort(), [
-    'SHA256SUMS', 'dress-bubble.dat', 'dress-font.dat', 'dress-widget.dat', 'index-manifest.json',
+    'SHA256SUMS', 'dress-bubble.dat', 'dress-font.dat', 'dress-widget.dat', 'enhancement-pack.json', 'index-manifest.json',
   ]);
   const stored = JSON.parse(await readFile(join(f.outputDirectory, 'index-manifest.json'), 'utf8'));
   assert.deepEqual(stored, manifest);
   const sums = await readFile(join(f.outputDirectory, 'SHA256SUMS'), 'utf8');
-  assert.equal(sums.trim().split('\n').length, 4);
+  assert.equal(sums.trim().split('\n').length, 5);
+  const catalog = JSON.parse(await readFile(join(f.outputDirectory, 'enhancement-pack.json'), 'utf8'));
+  assert.equal(catalog.packs[0].minWeqVersion, '2.7.0');
+  assert.equal(catalog.packs[0].components[0].manifest.nativeCommit, commit);
+  assert.match(catalog.packs[0].contentVersion, /^[a-f0-9]{64}$/);
 });
 
 for (const mode of ['hash', 'size', 'missing', 'header', 'seed', 'symlink', 'asset']) {
@@ -68,5 +72,9 @@ test('不覆盖已有发布产物', async (t) => {
   const f = await fixture(t);
   await stageDressRelease(f);
   await assert.rejects(stageDressRelease(f));
-  assert.equal((await readdir(f.outputDirectory)).length, 5);
+  assert.equal((await readdir(f.outputDirectory)).length, 6);
+});
+test('最低版本无效时不能生成或发布描述', async (t) => {
+  const f = await fixture(t);
+  await assert.rejects(stageDressRelease({ ...f, minWeqVersion: 'latest' }));
 });
