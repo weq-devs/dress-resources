@@ -23,6 +23,9 @@ permissions:
 
 jobs:
   release:
+    concurrency:
+      group: dress-release-feed
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -33,6 +36,22 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - name: Checkout shared release tools
+        uses: actions/checkout@v6
+        with:
+          repository: weq-devs/WeQ
+          ref: dev
+          path: .tools/WeQ
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - run: pnpm --dir .tools/WeQ install --filter @weq/network --frozen-lockfile --ignore-scripts
+      - name: Verify metadata signer before publishing
+        if: ${{ !inputs.preflight_only }}
+        env:
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: node .tools/WeQ/scripts/publish-release-feed.mjs --check-key
       - run: node --test test/*.test.mjs
       - name: Fetch fixed native resources
         env:
@@ -69,3 +88,10 @@ jobs:
           gh release upload "$TAG" dist/index-manifest.json dist/enhancement-pack.json dist/SHA256SUMS \
             dist/dress-bubble.dat dist/dress-font.dat dist/dress-widget.dat
           gh release edit "$TAG" --draft=false --latest
+      - name: Publish signed update index
+        if: ${{ !inputs.preflight_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.stage.outputs.tag }}
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: node .tools/WeQ/scripts/publish-release-feed.mjs
