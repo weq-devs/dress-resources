@@ -43,6 +43,7 @@ jobs:
           ref: dev
           path: .tools/WeQ
           persist-credentials: false
+          submodules: recursive
       - uses: pnpm/action-setup@v4
         with:
           version: 12.8.1
