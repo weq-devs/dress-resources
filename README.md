@@ -21,7 +21,7 @@ node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market
 node scripts/stage-dress-index.mjs --source ../nt_helper/resources/dress --output dist/dress --min-weq-version 2.8.0
 ```
 
-装扮暂存命令读取环境变量 `WEQ_DRESS_ENCRYPTION_KEY`。正式工作流的同名密钥须与已发布 native 的 `WEQ_DRESS_KEYS` 中一把密钥对应，另需配置可只读检出私有快照的 `NT_HELPER_TOKEN`。发布两包均使用已配置的 `WEQ_RELEASE_SIGNING_KEY`，签名工具取 WeQ `dev`，单次资源更新无需提交 WeQ 源码。工作流上传选定的附件后更新签名索引，未选中的包继续指向自己的上一版。相同输入的 Release 可复用，签名索引发布失败可以重跑。
+装扮暂存命令读取环境变量 `WEQ_DRESS_ENCRYPTION_KEY`。正式工作流的同名密钥须与已发布 native 的 `WEQ_DRESS_KEYS` 中一把密钥对应。私有快照通过 `NT_HELPER_TOKEN` 检出。该凭据只需私有 `nt_helper` 仓的 Contents 读取权限。预检与发布均检查 `WEQ_RELEASE_SIGNING_KEY`。签名工具取 WeQ `dev`，单次资源更新无需提交 WeQ 源码。工作流上传选定的附件后更新签名索引，未选中的包继续指向自己的上一版。相同输入的 Release 可复用，签名索引发布失败可以重跑。
 
 ## 旧客户端
 

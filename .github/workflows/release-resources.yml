@@ -59,6 +59,7 @@ jobs:
           token: ${{ secrets.NT_HELPER_TOKEN }}
           path: .private-dress
           persist-credentials: false
+          sparse-checkout: resources/dress
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -69,8 +70,7 @@ jobs:
       - name: Verify the shared tools support the unified index
         run: node --input-type=module -e 'import { RESOURCE_FEED_TAG } from "./.tools/WeQ/packages/network/src/release_metadata.mjs"; if (RESOURCE_FEED_TAG !== "weq-resource-feed") process.exit(1)'
       - run: node --test test/*.test.mjs
-      - name: Verify metadata signer before publishing
-        if: ${{ !inputs.preflight_only }}
+      - name: Verify metadata signer
         env:
           WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
         run: node .tools/WeQ/scripts/publish-release-feed.mjs --check-key
