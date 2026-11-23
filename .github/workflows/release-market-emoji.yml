@@ -58,7 +58,7 @@ jobs:
           MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
         run: |
           set -euo pipefail
-          tag=$(node scripts/stage-market-emoji.mjs --csv .tools/WeQ/resources/emoji/market.csv +            --output dist --min-weq-version "$MIN_WEQ_VERSION")
+          tag=$(node scripts/stage-market-emoji.mjs --csv .tools/WeQ/resources/emoji/market.csv --output dist --min-weq-version "$MIN_WEQ_VERSION")
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: Publish catalog and signed update index
         if: ${{ !inputs.preflight_only }}
@@ -68,7 +68,7 @@ jobs:
           WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" --latest=false +            --title "WeQ 商城表情目录 $TAG" --notes '独立分发的商城表情搜索目录。'
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --latest=false --title "WeQ 商城表情目录 $TAG" --notes '独立分发的商城表情搜索目录。'
           gh release upload "$TAG" dist/market.csv dist/enhancement-market-emoji.json
           gh release edit "$TAG" --draft=false --latest=false
           node .tools/WeQ/scripts/publish-release-feed.mjs
