@@ -1,41 +1,28 @@
-# WeQ 装扮离线索引
+# WeQ 资源增强包
 
-独立分发 WeQ 使用的气泡、字体与头像挂件离线索引。完整数据通过 Release 附件分发，不进入 Git 历史。
+这里分发气泡、字体与头像挂件的离线索引，以及商城表情目录。WeQ 从 `weq-resource-feed/update-index.json` 读取同一份签名索引，按包发现和安装更新。
 
-本仓维护发布工具、格式契约和测试；不保存 QQ 账号、凭据或用户聊天内容。
+## 两包的数据来源
 
-## 格式与兼容
+- **装扮离线索引** 由维护者在已登录 QQ 的环境采集三份 `*_resources`，存入私有 `weq-devs/nt_helper`。统一工作流读取明确的私有仓提交，将记录压缩并加密成 `dress-*.dat`，生成 `enhancement-dress-v2.json`，发布为 `dress-index-*`。清单的 `keyId` 对应客户端 native 中已内置的密钥，持续采集可独立发布。
+- **商城表情目录** 使用 `market.csv.gz` 和 `enhancement-market-emoji.json`，发布为 `market-emoji-*`。首次从仓内的 `resources/market-seed.csv.gz` 开始，后续读取最新签名索引并下载已校验的目录，然后从实际最大包 ID 继续采集。原始工作 CSV 放在 `.cache/`。
 
-索引只记录装扮 ID、部件名、CDN 路径和大小，不包含完整素材。沿用 `NTDR` v1（protobuf 记录流、Brotli 压缩、AES-CBC），`nativeCommit` 表示配套密钥来源。WeQ 的统一增强包检查器发现已发布描述，检查最低 WeQ 版本及 native 身份后固定明确 tag 下载，不混用不匹配的 native。
+## 预检与发布
 
-Release 包含三份 `dress-{bubble,font,widget}.dat`、`index-manifest.json`、统一描述 `enhancement-pack.json` 和 `SHA256SUMS`。统一描述记录内容 SHA-256、`minWeqVersion`、运行接口及索引清单；内容身份不包含 tag 或下载地址。Git 不接纳 `.dat` 与原始 `*_resources`。
+在 Actions 手动运行 **Release resource enhancements**，选择 `both`、`dress` 或 `market-emoji`。包含装扮时填入私有仓的采集快照完整 SHA，包含表情时可用 `refresh_market` 决定是否继续采集。最低 WeQ 版本默认 2.8.0。默认开启 `preflight_only`。
 
-## 本地验证
+本地可用测试密钥验证格式。以下命令使用本机采集目录和仓内首次表情快照：
 
 ```sh
 node --test test/*.test.mjs
-gh release download <明确 native tag> --repo weq-devs/nt_helper_release \
-  --pattern manifest.json --pattern 'dress-*.dat' --dir .cache/native
-node scripts/stage-release.mjs --native-manifest .cache/native/manifest.json \
-  --assets .cache/native --output dist --min-weq-version 2.7.0
+node scripts/prepare-market-source.mjs --output .cache/market.csv
+mkdir -p dist
+node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market-emoji --min-weq-version 2.8.0
+node scripts/stage-dress-index.mjs --source ../nt_helper/resources/dress --output dist/dress --min-weq-version 2.8.0
 ```
 
-汇总器验证完整 commit、密钥标识、三类资产的名称、格式头、体积和 SHA-256，拒绝链接和已有输出目录。它只原样分发已验证资源，不重新爬取、压缩或加密。
+装扮暂存命令读取环境变量 `WEQ_DRESS_ENCRYPTION_KEY`。正式工作流的同名密钥须与已发布 native 的 `WEQ_DRESS_KEYS` 中一把密钥对应，另需配置可只读检出私有快照的 `NT_HELPER_TOKEN`。发布两包均使用已配置的 `WEQ_RELEASE_SIGNING_KEY`，签名工具取 WeQ `dev`，单次资源更新无需提交 WeQ 源码。工作流上传选定的附件后更新签名索引，未选中的包继续指向自己的上一版。相同输入的 Release 可复用，签名索引发布失败可以重跑。
 
-## 发布
+## 旧客户端
 
-手动运行 `Release dress indexes`，填写明确 native tag。默认只预检；关闭 `preflight_only` 才创建新 Release。现阶段更新数据仍先沿用 native 发布生成兼容资源，再在这里独立分发；资源构建与 native commit 的彻底解耦另行迁移。
-
-`min_weq_version` 填写已验证的最早兼容版本，默认基线为 2.7.0；只更新数据而接口仍兼容时保持原值，不复制本次应用版本。最低版本不替代 native 密钥检查。发布过程不覆盖既有版本，五个清单／数据附件全部校验后才公开。
-
-客户端下载按类别进行，三类文件不再默认进入安装包。已下载素材继续从共享缓存读取，索引更新不会清除用户现有气泡、字体或挂件。
-
-## 签名更新索引
-
-发布工作流复用 WeQ `dev` 的共享签名工具。非预检发布须先配置与客户端内置公钥对应的 `WEQ_RELEASE_SIGNING_KEY`（Ed25519 PEM）；密钥核对在任何公开写入前执行。普通资源版本公开后，工作流更新固定的预发布 Release `weq-update-feed` 及其 `update-index.json`，不改写正式资源资产、不取代 Latest。索引记录三类文件身份并携带原始增强包描述，客户端可经镜像验签，不依赖每次直连 GitHub API。
-
-索引更新串行执行，保留较新的渠道记录；首次从官方已公开版本初始化。共享工具、公钥和 CI 密钥配置均须到位才能上线，此处工作流变更本身不表示远端已发布索引。
-
-## 商城表情目录
-
-运行 `Release market emoji catalog`，填写含目录快照和发布工具的 WeQ 完整提交 SHA。默认只准备文件和校验，关闭 `preflight_only` 后发布 `market-emoji-<目录摘要>`，并更新专用的 `weq-market-emoji-feed` 签名索引。表情目录按 CSV 内容独立更新，同一版本可供各平台使用。
+**Release dress indexes** 继续提供 2.7.x 使用的 NTDR v1。它读取明确 native tag 下的三份 `dress-*.dat`，校验后发布 `index-manifest.json` 和 `enhancement-pack.json`，并更新原来的 `weq-update-feed`。旧包的 `nativeCommit` 仍与原生密钥配套。新工作流发布的资源不占用旧装扮 Release 的 Latest 位置。

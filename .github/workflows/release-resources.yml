@@ -1,0 +1,119 @@
+name: Release resource enhancements
+
+on:
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: 要发布的增强包
+        type: choice
+        options: [both, dress, market-emoji]
+        default: both
+      dress_source:
+        description: 装扮采集产物所在的私有 nt_helper 完整提交 SHA
+        required: false
+      refresh_market:
+        description: 从最近发布的目录继续采集
+        type: boolean
+        default: true
+      preflight_only:
+        description: 只准备和验证文件
+        type: boolean
+        default: true
+      min_weq_version:
+        description: 支持新资源格式的最低 WeQ 版本
+        required: true
+        default: '2.8.0'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    concurrency:
+      group: resource-enhancement-release-feed
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: weq-devs/WeQ
+          ref: dev
+          path: .tools/WeQ
+          persist-credentials: false
+          submodules: recursive
+      - name: Validate dress source commit
+        if: ${{ inputs.packs != 'market-emoji' }}
+        env:
+          DRESS_SOURCE: ${{ inputs.dress_source }}
+        run: '[[ "$DRESS_SOURCE" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@v6
+        if: ${{ inputs.packs != 'market-emoji' }}
+        with:
+          repository: weq-devs/nt_helper
+          ref: ${{ inputs.dress_source }}
+          token: ${{ secrets.NT_HELPER_TOKEN }}
+          path: .private-dress
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - run: pnpm --dir .tools/WeQ install --filter @weq/network --frozen-lockfile --ignore-scripts
+      - name: Verify the shared tools support the unified index
+        run: node --input-type=module -e 'import { RESOURCE_FEED_TAG } from "./.tools/WeQ/packages/network/src/release_metadata.mjs"; if (RESOURCE_FEED_TAG !== "weq-resource-feed") process.exit(1)'
+      - run: node --test test/*.test.mjs
+      - name: Verify metadata signer before publishing
+        if: ${{ !inputs.preflight_only }}
+        env:
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: node .tools/WeQ/scripts/publish-release-feed.mjs --check-key
+      - name: Stage dress index
+        if: ${{ inputs.packs != 'market-emoji' }}
+        env:
+          MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
+          PREFLIGHT: ${{ inputs.preflight_only }}
+          WEQ_DRESS_ENCRYPTION_KEY: ${{ secrets.WEQ_DRESS_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ "$PREFLIGHT" == true && -z "$WEQ_DRESS_ENCRYPTION_KEY" ]]; then
+            export WEQ_DRESS_ENCRYPTION_KEY
+            WEQ_DRESS_ENCRYPTION_KEY=$(node -p "require('node:crypto').randomBytes(32).toString('hex')")
+          fi
+          mkdir -p dist
+          node scripts/stage-dress-index.mjs --source .private-dress/resources/dress --output dist/dress --min-weq-version "$MIN_WEQ_VERSION"
+      - name: Stage market emoji
+        if: ${{ inputs.packs != 'dress' }}
+        env:
+          MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
+          REFRESH_MARKET: ${{ inputs.refresh_market }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          node scripts/prepare-market-source.mjs --output .cache/market.csv --tools .tools/WeQ
+          if [[ "$REFRESH_MARKET" == true ]]; then
+            node scripts/parcel_crawler.mjs
+          fi
+          node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market-emoji --min-weq-version "$MIN_WEQ_VERSION"
+      - name: Publish selected resources and signed index
+        if: ${{ !inputs.preflight_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKS: ${{ inputs.packs }}
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ "$PACKS" == both ]]; then
+            tracks=(dress market-emoji)
+          else
+            tracks=("$PACKS")
+          fi
+          export WEQ_RESOURCE_TAGS
+          WEQ_RESOURCE_TAGS=$(node scripts/publish-resource-assets.mjs "${tracks[@]}")
+          node .tools/WeQ/scripts/publish-release-feed.mjs

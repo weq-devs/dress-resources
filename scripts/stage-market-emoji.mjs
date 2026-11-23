@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
+import { gzipSync } from 'node:zlib';
+import { inspectMarketCsv, MAX_MARKET_BYTES } from './market-csv.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -15,17 +17,17 @@ if (!csv || !output || !/^\d+\.\d+\.\d+$/.test(minWeqVersion ?? ''))
   throw new Error('请指定 CSV、输出目录和最低 WeQ 版本');
 
 const file = await lstat(csv);
-if (!file.isFile() || file.size > 16 * 1024 ** 2)
+if (!file.isFile() || file.size > MAX_MARKET_BYTES)
   throw new Error('商城表情目录文件无效');
-const data = await readFile(csv);
-const text = new TextDecoder('utf-8', { fatal: true }).decode(data);
-if (!/^id,name,mark,feetype\r?\n\d+,/.test(text))
-  throw new Error('商城表情目录缺少表头或有效条目');
+const csvBytes = await readFile(csv);
+inspectMarketCsv(csvBytes);
+const data = gzipSync(csvBytes, { level: 9 });
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
-const name = 'market.csv';
+const name = 'market.csv.gz';
 const digest = sha256(data);
-const tag = `market-emoji-${digest.slice(0, 12)}`;
+const sourceVersion = sha256(JSON.stringify([digest, minWeqVersion]));
+const tag = `market-emoji-${sourceVersion.slice(0, 20)}`;
 const asset = {
   name,
   url: `https://github.com/weq-devs/dress-resources/releases/download/${tag}/${name}`,
@@ -36,13 +38,13 @@ const pack = {
   id: 'market-emoji',
   contentVersion: sha256(JSON.stringify([['market-emoji', name, data.length, digest]])),
   minWeqVersion,
-  runtime: 'market-csv-v1',
+  runtime: 'market-csv-gzip-v1',
   components: [{ type: 'market-emoji', asset }],
 };
 await mkdir(output);
 await writeFile(join(output, name), data);
 await writeFile(
   join(output, 'enhancement-market-emoji.json'),
-  `${JSON.stringify({ schemaVersion: 1, packs: [pack] }, null, 2)}\n`,
+  `${JSON.stringify({ schemaVersion: 1, sourceVersion, packs: [pack] }, null, 2)}\n`,
 );
 process.stdout.write(`${tag}\n`);
