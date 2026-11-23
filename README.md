@@ -35,3 +35,7 @@ node scripts/stage-release.mjs --native-manifest .cache/native/manifest.json \
 发布工作流复用 WeQ `dev` 的共享签名工具。非预检发布须先配置与客户端内置公钥对应的 `WEQ_RELEASE_SIGNING_KEY`（Ed25519 PEM）；密钥核对在任何公开写入前执行。普通资源版本公开后，工作流更新固定的预发布 Release `weq-update-feed` 及其 `update-index.json`，不改写正式资源资产、不取代 Latest。索引记录三类文件身份并携带原始增强包描述，客户端可经镜像验签，不依赖每次直连 GitHub API。
 
 索引更新串行执行，保留较新的渠道记录；首次从官方已公开版本初始化。共享工具、公钥和 CI 密钥配置均须到位才能上线，此处工作流变更本身不表示远端已发布索引。
+
+## 商城表情目录
+
+运行 `Release market emoji catalog`，填写含目录快照和发布工具的 WeQ 完整提交 SHA。默认只准备文件和校验，关闭 `preflight_only` 后发布 `market-emoji-<目录摘要>`，并更新专用的 `weq-market-emoji-feed` 签名索引。表情目录按 CSV 内容独立更新，同一版本可供各平台使用。

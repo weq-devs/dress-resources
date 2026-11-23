@@ -1,0 +1,74 @@
+name: Release market emoji catalog
+
+on:
+  workflow_dispatch:
+    inputs:
+      weq_commit:
+        description: 包含目录快照和发布工具的 WeQ 完整提交 SHA
+        required: true
+      preflight_only:
+        description: 只准备和验证，不发布
+        type: boolean
+        default: true
+      min_weq_version:
+        description: 支持商城表情目录增强包的最低 WeQ 版本
+        required: true
+        default: '2.7.5'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    concurrency:
+      group: market-emoji-release-feed
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate source commit
+        env:
+          WEQ_COMMIT: ${{ inputs.weq_commit }}
+        run: '[[ "$WEQ_COMMIT" =~ ^[a-f0-9]{40}$ ]]'
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v6
+        with:
+          repository: weq-devs/WeQ
+          ref: ${{ inputs.weq_commit }}
+          path: .tools/WeQ
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.8.1
+      - run: pnpm --dir .tools/WeQ install --filter @weq/network --frozen-lockfile --ignore-scripts
+      - name: Verify metadata signer before publishing
+        if: ${{ !inputs.preflight_only }}
+        env:
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: node .tools/WeQ/scripts/publish-release-feed.mjs --check-key
+      - name: Stage catalog
+        id: stage
+        env:
+          MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
+        run: |
+          set -euo pipefail
+          tag=$(node scripts/stage-market-emoji.mjs --csv .tools/WeQ/resources/emoji/market.csv +            --output dist --min-weq-version "$MIN_WEQ_VERSION")
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Publish catalog and signed update index
+        if: ${{ !inputs.preflight_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.stage.outputs.tag }}
+          WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" --draft --target "$GITHUB_SHA" --latest=false +            --title "WeQ 商城表情目录 $TAG" --notes '独立分发的商城表情搜索目录。'
+          gh release upload "$TAG" dist/market.csv dist/enhancement-market-emoji.json
+          gh release edit "$TAG" --draft=false --latest=false
+          node .tools/WeQ/scripts/publish-release-feed.mjs
