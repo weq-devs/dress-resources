@@ -26,7 +26,7 @@ const data = gzipSync(csvBytes, { level: 9 });
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const name = 'market.csv.gz';
 const digest = sha256(data);
-const sourceVersion = sha256(JSON.stringify([digest, minWeqVersion]));
+const sourceVersion = sha256(JSON.stringify([sha256(csvBytes), minWeqVersion]));
 const tag = `market-emoji-${sourceVersion.slice(0, 20)}`;
 const asset = {
   name,

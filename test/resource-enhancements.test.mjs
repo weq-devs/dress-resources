@@ -24,6 +24,9 @@ test('表情目录从上一版继续，简介中的换行和逗号不影响最�
   const descriptor = JSON.parse(await readFile(join(output, 'enhancement-market-emoji.json')));
   const file = await readFile(base);
   assert.equal(gunzipSync(file).toString(), source);
+  const rawSha256 = createHash('sha256').update(source).digest('hex');
+  const sourceVersion = createHash('sha256').update(JSON.stringify([rawSha256, '2.8.0'])).digest('hex');
+  assert.equal(tag, `market-emoji-${sourceVersion.slice(0, 20)}`);
   assert.equal(descriptor.packs[0].components[0].asset.sha256, createHash('sha256').update(file).digest('hex'));
   assert(descriptor.packs[0].components[0].asset.url.endsWith(`/${tag}/market.csv.gz`));
   const continued = join(root, 'continued.csv');
