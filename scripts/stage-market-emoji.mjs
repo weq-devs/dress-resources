@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { gzipSync } from 'node:zlib';
 import { inspectMarketCsv, MAX_MARKET_BYTES } from './market-csv.mjs';
+import { isMinimumWeqVersion } from './min-weq-version.mjs';
 
 const { values } = parseArgs({
   options: {
@@ -13,7 +14,7 @@ const { values } = parseArgs({
   },
 });
 const { csv, output, 'min-weq-version': minWeqVersion } = values;
-if (!csv || !output || !/^\d+\.\d+\.\d+$/.test(minWeqVersion ?? ''))
+if (!csv || !output || !isMinimumWeqVersion(minWeqVersion))
   throw new Error('请指定 CSV、输出目录和最低 WeQ 版本');
 
 const file = await lstat(csv);

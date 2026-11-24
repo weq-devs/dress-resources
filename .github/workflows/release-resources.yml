@@ -22,7 +22,7 @@ on:
       min_weq_version:
         description: 支持新资源格式的最低 WeQ 版本
         required: true
-        default: '2.8.0'
+        default: '2.8.0-beta.1'
 
 permissions:
   contents: read

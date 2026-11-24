@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { brotliCompressSync, brotliDecompressSync, constants } from 'node:zlib';
+import { isMinimumWeqVersion } from './min-weq-version.mjs';
 
 const kinds = ['bubble', 'font', 'widget'];
 const magic = Buffer.from('NTDR\x02');
@@ -42,7 +43,7 @@ function encrypt(raw, kind, key, keyId) {
 }
 
 export async function stageDressIndex({ source, output, minWeqVersion, hexKey }) {
-  if (!source || !output || !/^[0-9]+\.[0-9]+\.[0-9]+$/.test(minWeqVersion ?? ''))
+  if (!source || !output || !isMinimumWeqVersion(minWeqVersion))
     throw new Error('请指定装扮输入、输出目录和最低 WeQ 版本');
   if (!/^[a-fA-F0-9]{64}$/.test(hexKey ?? ''))
     throw new Error('需要 WEQ_DRESS_ENCRYPTION_KEY 中的 32 字节十六进制密钥');

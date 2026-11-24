@@ -9,7 +9,9 @@
 
 ## 预检与发布
 
-在 Actions 手动运行 **Release resource enhancements**，选择 `both`、`dress` 或 `market-emoji`。包含装扮时填入私有仓的采集快照完整 SHA，包含表情时可用 `refresh_market` 决定是否继续采集。最低 WeQ 版本默认 2.8.0。默认开启 `preflight_only`。
+在 Actions 手动运行 **Release resource enhancements**，选择 `both`、`dress` 或 `market-emoji`。包含装扮时填入私有仓的采集快照完整 SHA，包含表情时可用 `refresh_market` 决定是否继续采集。最低 WeQ 版本默认 `2.8.0-beta.1`，支持该 Beta 和之后的版本；装扮仍需要带对应密钥的 native。默认开启 `preflight_only`。
+
+只调整最低版本时，沿用已发布装扮的采集快照，关闭 `refresh_market` 复用已发布的表情目录。最低版本参与发布标签计算，工作流会发布新标签并更新签名索引，不覆盖原 Release。
 
 本地可用测试密钥验证格式。以下命令使用本机采集目录和仓内首次表情快照：
 
@@ -17,8 +19,8 @@
 node --test test/*.test.mjs
 node scripts/prepare-market-source.mjs --output .cache/market.csv
 mkdir -p dist
-node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market-emoji --min-weq-version 2.8.0
-node scripts/stage-dress-index.mjs --source ../nt_helper/resources/dress --output dist/dress --min-weq-version 2.8.0
+node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market-emoji --min-weq-version 2.8.0-beta.1
+node scripts/stage-dress-index.mjs --source ../nt_helper/resources/dress --output dist/dress --min-weq-version 2.8.0-beta.1
 ```
 
 装扮暂存命令读取环境变量 `WEQ_DRESS_ENCRYPTION_KEY`。正式工作流的同名密钥须与已发布 native 的 `WEQ_DRESS_KEYS` 中一把密钥对应。私有快照通过 `NT_HELPER_TOKEN` 检出。该凭据只需私有 `nt_helper` 仓的 Contents 读取权限。预检与发布均检查 `WEQ_RELEASE_SIGNING_KEY`。签名工具取 WeQ `dev`，单次资源更新无需提交 WeQ 源码。工作流上传选定的附件后更新签名索引，未选中的包继续指向自己的上一版。相同输入的 Release 可复用，签名索引发布失败可以重跑。
