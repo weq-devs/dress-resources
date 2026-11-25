@@ -1,6 +1,9 @@
 name: Release resource enhancements
 
 on:
+  schedule:
+    # 北京时间每天 10:17。
+    - cron: '17 2 * * *'
   workflow_dispatch:
     inputs:
       packs:
@@ -35,6 +38,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      PACKS: ${{ github.event_name == 'schedule' && 'market-emoji' || inputs.packs }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -47,12 +52,12 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Validate dress source commit
-        if: ${{ inputs.packs != 'market-emoji' }}
+        if: ${{ env.PACKS != 'market-emoji' }}
         env:
           DRESS_SOURCE: ${{ inputs.dress_source }}
         run: '[[ "$DRESS_SOURCE" =~ ^[a-f0-9]{40}$ ]]'
       - uses: actions/checkout@v6
-        if: ${{ inputs.packs != 'market-emoji' }}
+        if: ${{ env.PACKS != 'market-emoji' }}
         with:
           repository: weq-devs/nt_helper
           ref: ${{ inputs.dress_source }}
@@ -75,7 +80,7 @@ jobs:
           WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
         run: node .tools/WeQ/scripts/publish-release-feed.mjs --check-key
       - name: Stage dress index
-        if: ${{ inputs.packs != 'market-emoji' }}
+        if: ${{ env.PACKS != 'market-emoji' }}
         env:
           MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
           PREFLIGHT: ${{ inputs.preflight_only }}
@@ -89,23 +94,29 @@ jobs:
           mkdir -p dist
           node scripts/stage-dress-index.mjs --source .private-dress/resources/dress --output dist/dress --min-weq-version "$MIN_WEQ_VERSION"
       - name: Stage market emoji
-        if: ${{ inputs.packs != 'dress' }}
+        if: ${{ env.PACKS != 'dress' }}
         env:
           MIN_WEQ_VERSION: ${{ inputs.min_weq_version }}
-          REFRESH_MARKET: ${{ inputs.refresh_market }}
+          REFRESH_MARKET: ${{ github.event_name == 'schedule' || inputs.refresh_market }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          node scripts/prepare-market-source.mjs --output .cache/market.csv --tools .tools/WeQ
+          source_args=(--output .cache/market.csv --tools .tools/WeQ)
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            source_args+=(--min-weq-version-output .cache/market-min-weq-version)
+          fi
+          node scripts/prepare-market-source.mjs "${source_args[@]}"
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            MIN_WEQ_VERSION=$(<.cache/market-min-weq-version)
+          fi
           if [[ "$REFRESH_MARKET" == true ]]; then
             node scripts/parcel_crawler.mjs
           fi
           node scripts/stage-market-emoji.mjs --csv .cache/market.csv --output dist/market-emoji --min-weq-version "$MIN_WEQ_VERSION"
       - name: Publish selected resources and signed index
-        if: ${{ !inputs.preflight_only }}
+        if: ${{ github.event_name == 'schedule' || !inputs.preflight_only }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PACKS: ${{ inputs.packs }}
           WEQ_RELEASE_SIGNING_KEY: ${{ secrets.WEQ_RELEASE_SIGNING_KEY }}
         run: |
           set -euo pipefail

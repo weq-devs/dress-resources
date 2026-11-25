@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 import { inspectMarketCsv, MAX_MARKET_BYTES } from './market-csv.mjs';
+import { isMinimumWeqVersion } from './min-weq-version.mjs';
 
 const repo = 'weq-devs/dress-resources';
 const releases = `https://github.com/${repo}/releases/download`;
@@ -40,17 +41,34 @@ async function previousCatalog(tools) {
   const data = await readAsset(`${releases}/${entry.tag}/${asset.name}`, asset.size);
   if (data.length !== asset.size || createHash('sha256').update(data).digest('hex') !== asset.sha256)
     throw new Error('已发布表情目录与签名索引不一致');
-  return data;
+  return { data, descriptor: entry.catalogs['enhancement-market-emoji.json'] };
 }
 
 const { values } = parseArgs({
-  options: { output: { type: 'string' }, base: { type: 'string' }, tools: { type: 'string' } },
+  options: {
+    output: { type: 'string' },
+    base: { type: 'string' },
+    tools: { type: 'string' },
+    'min-weq-version-output': { type: 'string' },
+  },
 });
 if (!values.output || (values.base && values.tools))
   throw new Error('指定 --output，可选 --base <本地 gzip> 或 --tools <WeQ 工具目录> 续作');
-const prior = values.base ? await readFile(values.base) : values.tools ? await previousCatalog(values.tools) : null;
-const csv = gunzipSync(prior ?? await readFile(seed), { maxOutputLength: MAX_MARKET_BYTES });
+const minVersionOutput = values['min-weq-version-output'];
+if (minVersionOutput && !values.tools)
+  throw new Error('--min-weq-version-output 需要 --tools 读取线上签名索引');
+const prior = values.tools ? await previousCatalog(values.tools) : null;
+const base = values.base ? await readFile(values.base) : prior?.data;
+const csv = gunzipSync(base ?? await readFile(seed), { maxOutputLength: MAX_MARKET_BYTES });
 const { count, maxId } = inspectMarketCsv(csv);
+if (minVersionOutput) {
+  const descriptor = prior?.descriptor && JSON.parse(prior.descriptor);
+  const minVersion = descriptor?.packs?.find((pack) => pack.id === 'market-emoji')?.minWeqVersion;
+  if (!isMinimumWeqVersion(minVersion))
+    throw new Error('线上表情目录缺少有效的最低 WeQ 版本');
+  await mkdir(dirname(minVersionOutput), { recursive: true });
+  await writeFile(minVersionOutput, `${minVersion}\n`, { flag: 'wx' });
+}
 await mkdir(dirname(values.output), { recursive: true });
 await writeFile(values.output, csv, { flag: 'wx' });
-console.log(`${prior ? '上版目录' : '首次发布目录'}：${count} 套，最大 ID ${maxId}`);
+console.log(`${base ? '上版目录' : '首次发布目录'}：${count} 套，最大 ID ${maxId}`);
