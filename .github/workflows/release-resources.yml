@@ -2,8 +2,9 @@ name: Release resource enhancements
 
 on:
   schedule:
-    # 北京时间每天 10:17。
-    - cron: '17 2 * * *'
+    # 北京时间 00:17、01:47、03:17……每 90 分钟一次。
+    - cron: '17 1-22/3 * * *'
+    - cron: '47 2-23/3 * * *'
   workflow_dispatch:
     inputs:
       packs:
